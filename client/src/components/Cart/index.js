@@ -5,6 +5,13 @@ import "./style.css";
 import { useStoreContext } from "../../utils/GlobalState";
 import { TOGGLE_CART, ADD_MULTIPLE_TO_CART } from "../../utils/actions";
 import { idbPromise } from "../../utils/helpers";
+//stripe
+import { QUERY_CATEGORIES, QUERY_CHECKOUT } from "../../utils/queries";
+import { loadStripe } from "@stripe/stripe-js";
+import { useLazyQuery } from "@apollo/client";
+
+//stripe
+const stripePromise = loadStripe("pk_test_TYooMQauvdEDq54NiTphI7jx");
 
 const Cart = () => {
   const [state, dispatch] = useStoreContext();
@@ -16,7 +23,7 @@ const Cart = () => {
       dispatch({ type: ADD_MULTIPLE_TO_CART, products: [...cart] });
     }
     if (!state.cart.length) {
-      getCart()
+      getCart();
     }
   }, [state.cart.length, dispatch]);
 
@@ -31,6 +38,34 @@ const Cart = () => {
     });
     return sum.toFixed(2);
   }
+
+  //checkout lazyquery
+  const [getCheckout, { data }] = useLazyQuery(QUERY_CHECKOUT);
+
+  useEffect(() => {
+    if (data) {
+      stripePromise.then(res => {
+        res.redirectToCheckout({ sessionId: data.checkout.session });
+      });
+    }
+  }, [data]);
+  
+  function submitCheckout() {
+    const productIds = [];
+
+    state.cart.forEach(item => {
+      for (let i = 0; i < item.purchaseQuantity; i++) {
+        productIds.push(item._id);
+      }
+    });
+
+    getCheckout({
+      variables: { products: productIds },
+    });
+  }
+
+  //stripe useeffect hook
+  
 
   if (!state.cartOpen) {
     return (
@@ -56,7 +91,7 @@ const Cart = () => {
           <div className="flex-row space-between">
             <strong>Total: ${calculateTotal()}</strong>
             {Auth.loggedIn() ? (
-              <button>Checkout</button>
+              <button onClick={submitCheckout}>Checkout</button>
             ) : (
               <span>(log in to check out)</span>
             )}
